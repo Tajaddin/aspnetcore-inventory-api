@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release
+      - name: Test (SQLite, no Docker) + coverage
+        run: dotnet test --no-build -c Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings --results-directory ./cov
+      - name: Coverage gate (>= 70%)
+        run: |
+          file=$(find ./cov -name 'coverage.cobertura.xml' | head -1)
+          rate=$(grep -o 'line-rate="[0-9.]*"' "$file" | head -1 | grep -o '[0-9.]*')
+          pct=$(awk -v r="$rate" 'BEGIN { printf "%.1f", r*100 }')
+          echo "line coverage: ${pct}%"
+          awk -v p="$pct" 'BEGIN { exit (p+0 >= 70) ? 0 : 1 }'
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t aspnetcore-inventory-api:ci .

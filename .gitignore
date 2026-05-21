@@ -1,0 +1,30 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+[Dd]ebug/
+[Rr]elease/
+TestResults/
+*.trx
+coverage*.xml
+coverage*.json
+
+## SQLite (demo/load)
+*.db
+*.db-shm
+*.db-wal
+
+## Env
+.env
+
+## OS / editor
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+## load
+load/results.json
