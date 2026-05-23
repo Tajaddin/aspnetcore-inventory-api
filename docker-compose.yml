@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: inventory
       POSTGRES_USER: inventory
-      POSTGRES_PASSWORD: inventory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inventory}
     ports:
       - "5432:5432"
     healthcheck:
@@ -20,6 +20,6 @@ services:
         condition: service_healthy
     environment:
       DB_PROVIDER: postgres
-      DATABASE_URL: "Host=db;Port=5432;Database=inventory;Username=inventory;Password=inventory"
+      DATABASE_URL: "Host=db;Port=5432;Database=inventory;Username=inventory;Password=${POSTGRES_PASSWORD:-inventory}"
     ports:
       - "8080:8080"
