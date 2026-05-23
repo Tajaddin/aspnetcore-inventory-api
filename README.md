@@ -15,12 +15,12 @@ DB_PROVIDER=sqlite ASPNETCORE_URLS=http://localhost:5080 dotnet run --project sr
 python load/load_probe.py --base http://localhost:5080 --requests 5000 --concurrency 50
 ```
 
+Last measured baseline (3 consecutive runs, full output and hardware in [`bench/results.txt`](bench/results.txt)):
+
 | Metric | Value |
 |---|---:|
-| **Throughput** | **1,482 req/s** |
-| Latency p50 | 31.8 ms |
-| Latency p95 | 49.6 ms |
-| Latency p99 | **58.2 ms** |
+| **Throughput** | **1,482 req/s** (run-to-run median: 1,526 rps on i7-10875H) |
+| Latency p99 | **~58 ms** |
 | Success rate | 5000 / 5000 (100%) |
 
 Measured on `GET /api/products?size=20` (paginated, category-filterable) against a single instance on the SQLite demo provider, driven by the standard-library Python probe at concurrency 50. Minimal APIs + EF Core keep per-request overhead low.
