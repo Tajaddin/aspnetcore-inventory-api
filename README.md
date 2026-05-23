@@ -46,7 +46,16 @@ Role categories unlocked: **Backend-.NET / C#**, Microsoft-stack, enterprise sof
 
 Modern .NET shops want minimal APIs, EF Core, and ProblemDetails, not legacy controllers. This repo backs the ".NET / C#" resume line with a tested, load-measured service.
 
-## Run it
+## How to run
+
+Prerequisites: .NET 8 SDK (Docker optional for the Postgres stack).
+
+```bash
+dotnet test                                                    # 16 tests on in-memory SQLite
+DB_PROVIDER=sqlite dotnet run --project src/InventoryApi       # zero-setup demo
+python load/load_probe.py --base http://localhost:5080 \
+       --requests 5000 --concurrency 50                        # reproduces the hero
+```
 
 ### Zero-setup demo (SQLite)
 
