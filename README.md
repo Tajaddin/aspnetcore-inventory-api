@@ -78,7 +78,8 @@ JSON bodies carry `category` as a number (0 Other, 1 Electronics, 2 Apparel, 3 H
 ### Production stack (Postgres via Docker)
 
 ```bash
-docker compose up --build   # app on :8080, Postgres on :5432, EF migrations on boot
+export POSTGRES_PASSWORD=$(openssl rand -hex 24)   # required, there is no default
+docker compose up --build   # app on :8080, Postgres on 127.0.0.1:5432 only, EF migrations on boot
 ```
 
 ## API
