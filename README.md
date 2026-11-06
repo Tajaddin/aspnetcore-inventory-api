@@ -1,6 +1,6 @@
 # aspnetcore-inventory-api
 
-> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 21 tests on SQLite with zero Docker, 91% line coverage.
+> ASP.NET Core 8 minimal API for an inventory catalog. **1,526 req/s at p99 57 ms** on a paginated list endpoint (median of 3 runs; single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 21 tests on SQLite with zero Docker, 91% line coverage.
 
 [![ci](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -19,8 +19,8 @@ Last measured baseline (3 consecutive runs, full output and hardware in [`bench/
 
 | Metric | Value |
 |---|---:|
-| **Throughput** | **1,482 req/s** (run-to-run median: 1,526 rps on i7-10875H) |
-| Latency p99 | **~58 ms** |
+| **Throughput** | **1,526 req/s** median of 3 runs (range 1,436-1,593) |
+| Latency p99 | **57 ms** median run (range 56.6-60.8 ms) |
 | Success rate | 5000 / 5000 (100%) |
 
 Measured on `GET /api/products?size=20` (paginated, category-filterable) against a single instance on the SQLite demo provider, driven by the standard-library Python probe at concurrency 50. Minimal APIs + EF Core keep per-request overhead low.
