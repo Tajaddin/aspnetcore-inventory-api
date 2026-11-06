@@ -1,6 +1,6 @@
 # aspnetcore-inventory-api
 
-> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 16 tests on SQLite with zero Docker, 87% coverage.
+> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 18 tests on SQLite with zero Docker, 87% coverage.
 
 [![ci](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -34,11 +34,11 @@ A product/inventory REST API built with the modern .NET stack:
 | Endpoints | ASP.NET Core 8 **minimal APIs** with `MapGroup`, typed `Results` |
 | Persistence | EF Core 8, **PostgreSQL** (Npgsql) in production with Flyway-style EF **migrations**; SQLite for tests + demo |
 | Domain | Products with SKU uniqueness, category enum, price precision, stock |
-| Atomic op | `POST /reserve` decrements stock transactionally, rejects over-reservation with 409 |
+| Atomic op | `POST /reserve` is one conditional `UPDATE ... WHERE StockQuantity >= quantity`, so concurrent reservations cannot oversell; 409 when stock is short, 404 when the product does not exist |
 | Validation | DataAnnotations on request records (property-targeted), per-field 400s |
 | Errors | RFC 7807 **ProblemDetails** for 404 / 409 / validation, via `AddProblemDetails` + `UseExceptionHandler` |
 | Health | `/healthz` health check endpoint |
-| Tests | 16: service unit tests + full-pipeline integration tests via `WebApplicationFactory`, all on in-memory SQLite |
+| Tests | 18: service unit tests + full-pipeline integration tests via `WebApplicationFactory` on in-memory SQLite, plus a reservation race on a shared SQLite file |
 
 ## Why this matters for hiring
 
@@ -51,7 +51,7 @@ Modern .NET shops want minimal APIs, EF Core, and ProblemDetails, not legacy con
 Prerequisites: .NET 8 SDK (Docker optional for the Postgres stack).
 
 ```bash
-dotnet test                                                    # 16 tests on in-memory SQLite
+dotnet test                                                    # 18 tests on SQLite
 DB_PROVIDER=sqlite dotnet run --project src/InventoryApi       # zero-setup demo
 python load/load_probe.py --base http://localhost:5080 \
        --requests 5000 --concurrency 50                        # reproduces the hero
@@ -87,7 +87,7 @@ docker compose up --build   # app on :8080, Postgres on :5432, EF migrations on 
 | POST | `/api/products` | Create (409 on duplicate SKU) |
 | PUT | `/api/products/{id}` | Partial update (null fields untouched) |
 | DELETE | `/api/products/{id}` | Delete |
-| POST | `/api/products/{id}/reserve` | Atomically reserve stock (409 if insufficient) |
+| POST | `/api/products/{id}/reserve` | Atomically reserve stock (409 if insufficient, 404 if missing) |
 | GET | `/healthz` | Health check |
 
 All error responses are `application/problem+json` (RFC 7807).
@@ -95,12 +95,13 @@ All error responses are `application/problem+json` (RFC 7807).
 ## Testing
 
 ```bash
-dotnet test                                                  # 16 tests on SQLite, no Docker
+dotnet test                                                  # 18 tests on SQLite, no Docker
 dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 ```
 
 - **ProductServiceTests** (9): create/get/list-filter/update-partial/delete/reserve (available, insufficient, missing)/SKU-exists. Fresh in-memory SQLite per test.
-- **ApiIntegrationTests** (7): full minimal-API pipeline via `WebApplicationFactory` — health, CRUD roundtrip, 404 problem shape, validation 400, duplicate-SKU 409, reserve-over-stock 409, delete 204-then-404.
+- **ApiIntegrationTests** (8): full minimal-API pipeline via `WebApplicationFactory` — health, CRUD roundtrip, 404 problem shape, validation 400, duplicate-SKU 409, reserve-over-stock 409, reserve-missing 404, delete 204-then-404.
+- **ReserveConcurrencyTests** (1): 20 concurrent reservations of 1 unit against stock 10, each with its own connection to a shared SQLite file. Exactly 10 succeed and stock ends at 0. The earlier read-check-save version let all 20 through.
 
 Coverage 87% (line, excluding generated EF migrations).
 

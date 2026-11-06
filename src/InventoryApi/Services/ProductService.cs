@@ -94,24 +94,30 @@ public class ProductService(AppDbContext db)
     }
 
     /// <summary>
-    /// Atomically decrement stock by quantity. Returns the outcome plus the
-    /// new product state when reserved.
+    /// Atomically decrement stock by quantity with one conditional UPDATE, so
+    /// concurrent reservations can never take more than the stock on hand.
+    /// Returns the outcome plus the new product state when reserved.
     /// </summary>
     public async Task<(ReserveOutcome Outcome, ProductResponse? Product)> ReserveAsync(
         int id, int quantity, CancellationToken ct = default)
     {
-        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
-        if (product is null)
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var now = DateTime.UtcNow;
+        var reserved = await db.Products
+            .Where(p => p.Id == id && p.StockQuantity >= quantity)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.StockQuantity, p => p.StockQuantity - quantity)
+                .SetProperty(p => p.UpdatedAt, now), ct);
+        if (reserved == 0)
         {
-            return (ReserveOutcome.NotFound, null);
+            var exists = await db.Products.AnyAsync(p => p.Id == id, ct);
+            return (exists ? ReserveOutcome.InsufficientStock : ReserveOutcome.NotFound, null);
         }
-        if (product.StockQuantity < quantity)
-        {
-            return (ReserveOutcome.InsufficientStock, null);
-        }
-        product.StockQuantity -= quantity;
-        product.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+
+        // The UPDATE holds the row lock until commit, so this reads exactly
+        // the state it left, not a later reservation's.
+        var product = await db.Products.AsNoTracking().SingleAsync(p => p.Id == id, ct);
+        await tx.CommitAsync(ct);
         return (ReserveOutcome.Reserved, ProductResponse.From(product));
     }
 }
