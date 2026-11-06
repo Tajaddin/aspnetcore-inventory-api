@@ -1,6 +1,6 @@
 # aspnetcore-inventory-api
 
-> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 20 tests on SQLite with zero Docker, 87% coverage.
+> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 20 tests on SQLite with zero Docker, 90% line coverage.
 
 [![ci](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -103,7 +103,7 @@ dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 - **ApiIntegrationTests** (8): full minimal-API pipeline via `WebApplicationFactory` — health, CRUD roundtrip, 404 problem shape, validation 400, duplicate-SKU 409, reserve-over-stock 409, reserve-missing 404, delete 204-then-404.
 - **ReserveConcurrencyTests** (1): 20 concurrent reservations of 1 unit against stock 10, each with its own connection to a shared SQLite file. Exactly 10 succeed and stock ends at 0. The earlier read-check-save version let all 20 through.
 
-Coverage 87% (line, excluding generated EF migrations).
+Line coverage 90.66% (204 of 225 lines, excluding generated EF migrations), from `dotnet test -c Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings`.
 
 ## Project layout
 
