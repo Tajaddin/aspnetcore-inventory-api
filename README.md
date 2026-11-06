@@ -1,6 +1,6 @@
 # aspnetcore-inventory-api
 
-> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 20 tests on SQLite with zero Docker, 90% line coverage.
+> ASP.NET Core 8 minimal API for an inventory catalog. **1,482 req/s at p99 58ms** on a paginated list endpoint (single instance, SQLite demo provider, 50 concurrent clients, 5000/5000 OK). EF Core + Postgres + migrations, atomic stock reservation, RFC 7807 problem details, 21 tests on SQLite with zero Docker, 91% line coverage.
 
 [![ci](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Tajaddin/aspnetcore-inventory-api/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -38,7 +38,7 @@ A product/inventory REST API built with the modern .NET stack:
 | Validation | DataAnnotations on request records (property-targeted), per-field 400s |
 | Errors | RFC 7807 **ProblemDetails** for 404 / 409 / validation, via `AddProblemDetails` + `UseExceptionHandler` |
 | Health | `/healthz` health check endpoint |
-| Tests | 20: service unit tests + full-pipeline integration tests via `WebApplicationFactory` on in-memory SQLite, plus a reservation race on a shared SQLite file that the `postgres` CI job repeats on PostgreSQL 16 |
+| Tests | 21: service unit tests + full-pipeline integration tests via `WebApplicationFactory` on in-memory SQLite, plus a duplicate-SKU create race over HTTP and a reservation race on a shared SQLite file that the `postgres` CI job repeats on PostgreSQL 16 |
 
 ## Why this matters for hiring
 
@@ -51,7 +51,7 @@ Modern .NET shops want minimal APIs, EF Core, and ProblemDetails, not legacy con
 Prerequisites: .NET 8 SDK (Docker optional for the Postgres stack).
 
 ```bash
-dotnet test                                                    # 20 tests on SQLite
+dotnet test                                                    # 21 tests on SQLite
 DB_PROVIDER=sqlite dotnet run --project src/InventoryApi       # zero-setup demo
 python load/load_probe.py --base http://localhost:5080 \
        --requests 5000 --concurrency 50                        # reproduces the hero
@@ -95,7 +95,7 @@ All error responses are `application/problem+json` (RFC 7807).
 ## Testing
 
 ```bash
-dotnet test                                                  # 20 tests on SQLite, no Docker
+dotnet test                                                  # 21 tests on SQLite, no Docker
 dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
 # the reservation race on PostgreSQL, on a throwaway database built by the EF migrations
@@ -106,8 +106,9 @@ TEST_POSTGRES_CONNECTION="Host=localhost;Username=postgres;Password=..." \
 - **ProductServiceTests** (11): create/get/list-filter/update-partial/delete/reserve (available, insufficient, missing)/negative stock rejected by the CHECK constraint/unique-index violation mapped to `DuplicateSkuException`/SKU-exists. Fresh in-memory SQLite per test.
 - **ApiIntegrationTests** (8): full minimal-API pipeline via `WebApplicationFactory` — health, CRUD roundtrip, 404 problem shape, validation 400, duplicate-SKU 409, reserve-over-stock 409, reserve-missing 404, delete 204-then-404.
 - **ReserveConcurrencyTests** (1): 20 concurrent reservations of 1 unit against stock 10, each with its own connection to a shared SQLite file. Exactly 10 succeed, each reports the stock its own update left (9 down to 0), and stock ends at 0. The earlier read-check-save version let all 20 through. With `TEST_POSTGRES_CONNECTION` set it runs on PostgreSQL instead; the `postgres` CI job does this against a `postgres:16-alpine` service.
+- **ConcurrentCreateTests** (1): 20 concurrent creates of one SKU through the full pipeline, on a temp-file SQLite database with a connection per request. Exactly one 201 and nineteen 409s; creates that pass the SKU pre-check and then hit the unique index get 409, not 500.
 
-Line coverage 90.66% (204 of 225 lines, excluding generated EF migrations), from `dotnet test -c Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings`.
+Line coverage 91.55% (206 of 225 lines, excluding generated EF migrations), from `dotnet test -c Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings`.
 
 ## Project layout
 
@@ -125,6 +126,8 @@ tests/InventoryApi.Tests/
   CustomWebAppFactory.cs     # WebApplicationFactory with SQLite swap
   ProductServiceTests.cs
   ApiIntegrationTests.cs
+  ConcurrentCreateTests.cs   # duplicate-SKU race over HTTP (temp-file SQLite host)
+  ReserveConcurrencyTests.cs # reservation race (SQLite file, or Postgres via TEST_POSTGRES_CONNECTION)
 load/load_probe.py           # stdlib HTTP load probe
 ```
 
