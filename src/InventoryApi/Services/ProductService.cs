@@ -1,7 +1,9 @@
 using InventoryApi.Data;
 using InventoryApi.Domain;
 using InventoryApi.Dtos;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace InventoryApi.Services;
 
@@ -15,6 +17,12 @@ public enum ReserveOutcome
     NotFound,
     InsufficientStock
 }
+
+/// <summary>
+/// The insert hit the unique SKU index: another create took the SKU after
+/// the caller checked it was free.
+/// </summary>
+public class DuplicateSkuException(string sku) : Exception($"SKU '{sku}' already exists");
 
 public class ProductService(AppDbContext db)
 {
@@ -67,7 +75,14 @@ public class ProductService(AppDbContext db)
             UpdatedAt = now
         };
         db.Products.Add(product);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            throw new DuplicateSkuException(req.Sku);
+        }
         return ProductResponse.From(product);
     }
 
@@ -120,4 +135,11 @@ public class ProductService(AppDbContext db)
         await tx.CommitAsync(ct);
         return (ReserveOutcome.Reserved, ProductResponse.From(product));
     }
+
+    private static bool IsUniqueViolation(DbUpdateException ex) => ex.InnerException switch
+    {
+        PostgresException pg => pg.SqlState == PostgresErrorCodes.UniqueViolation,
+        SqliteException sqlite => sqlite.SqliteExtendedErrorCode == SQLitePCL.raw.SQLITE_CONSTRAINT_UNIQUE,
+        _ => false
+    };
 }

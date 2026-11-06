@@ -136,6 +136,18 @@ public class ProductServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_with_taken_sku_throws_DuplicateSkuException()
+    {
+        // The insert that loses the race when two creates both pass the
+        // endpoint's SkuExistsAsync check.
+        await _service.CreateAsync(SampleCreate(sku: "TAKEN"));
+
+        var act = () => _service.CreateAsync(SampleCreate(sku: "TAKEN"));
+
+        await act.Should().ThrowAsync<DuplicateSkuException>();
+    }
+
+    [Fact]
     public async Task SkuExists_detects_duplicates()
     {
         await _service.CreateAsync(SampleCreate(sku: "DUP"));

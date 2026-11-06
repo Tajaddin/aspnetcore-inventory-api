@@ -34,10 +34,17 @@ public static class ProductEndpoints
             }
             if (await svc.SkuExistsAsync(req.Sku, ct))
             {
-                return Results.Problem(statusCode: 409, title: "Duplicate SKU", detail: $"SKU '{req.Sku}' already exists");
+                return DuplicateSku(req.Sku);
             }
-            var created = await svc.CreateAsync(req, ct);
-            return Results.Created($"/api/products/{created.Id}", created);
+            try
+            {
+                var created = await svc.CreateAsync(req, ct);
+                return Results.Created($"/api/products/{created.Id}", created);
+            }
+            catch (DuplicateSkuException)
+            {
+                return DuplicateSku(req.Sku);
+            }
         });
 
         group.MapPut("/{id:int}", async (int id, UpdateProductRequest req, ProductService svc, CancellationToken ct) =>
@@ -80,4 +87,7 @@ public static class ProductEndpoints
 
         return app;
     }
+
+    private static IResult DuplicateSku(string sku) =>
+        Results.Problem(statusCode: 409, title: "Duplicate SKU", detail: $"SKU '{sku}' already exists");
 }
