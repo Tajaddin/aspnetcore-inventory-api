@@ -11,7 +11,7 @@
 Reproducible with zero setup (no Docker, no Postgres):
 
 ```bash
-DB_PROVIDER=sqlite ASPNETCORE_URLS=http://localhost:5080 dotnet run --project src/InventoryApi
+DB_PROVIDER=sqlite ASPNETCORE_URLS=http://localhost:5080 dotnet run --no-launch-profile --project src/InventoryApi
 python load/load_probe.py --base http://localhost:5080 --requests 5000 --concurrency 50
 ```
 
@@ -52,7 +52,8 @@ Prerequisites: .NET 8 SDK (Docker optional for the Postgres stack).
 
 ```bash
 dotnet test                                                    # 21 tests on SQLite
-DB_PROVIDER=sqlite dotnet run --project src/InventoryApi       # zero-setup demo
+DB_PROVIDER=sqlite ASPNETCORE_URLS=http://localhost:5080 \
+  dotnet run --no-launch-profile --project src/InventoryApi    # zero-setup demo
 python load/load_probe.py --base http://localhost:5080 \
        --requests 5000 --concurrency 50                        # reproduces the hero
 ```
@@ -60,17 +61,19 @@ python load/load_probe.py --base http://localhost:5080 \
 ### Zero-setup demo (SQLite)
 
 ```bash
-DB_PROVIDER=sqlite dotnet run --project src/InventoryApi
-# API on http://localhost:5000 (or ASPNETCORE_URLS to override)
+DB_PROVIDER=sqlite ASPNETCORE_URLS=http://localhost:5080 dotnet run --no-launch-profile --project src/InventoryApi
+# API on http://localhost:5080; without --no-launch-profile, launchSettings.json moves it to :5086
 ```
 
 ```bash
 curl -s -XPOST localhost:5080/api/products -H 'content-type: application/json' \
-  -d '{"name":"Mechanical Keyboard","sku":"KB-1","price":89.99,"stockQuantity":50,"category":"Electronics"}'
+  -d '{"name":"Mechanical Keyboard","sku":"KB-1","price":89.99,"stockQuantity":50,"category":1}'
 
 curl -s 'localhost:5080/api/products?category=Electronics&size=20'
 curl -s -XPOST localhost:5080/api/products/1/reserve -H 'content-type: application/json' -d '{"quantity":3}'
 ```
+
+JSON bodies carry `category` as a number (0 Other, 1 Electronics, 2 Apparel, 3 Home, 4 Food); the `category` query parameter also takes the name.
 
 ### Production stack (Postgres via Docker)
 
