@@ -38,7 +38,7 @@ A product/inventory REST API built with the modern .NET stack:
 | Validation | DataAnnotations on request records (property-targeted), per-field 400s |
 | Errors | RFC 7807 **ProblemDetails** for 404 / 409 / validation, via `AddProblemDetails` + `UseExceptionHandler` |
 | Health | `/healthz` health check endpoint |
-| Tests | 20: service unit tests + full-pipeline integration tests via `WebApplicationFactory` on in-memory SQLite, plus a reservation race on a shared SQLite file |
+| Tests | 20: service unit tests + full-pipeline integration tests via `WebApplicationFactory` on in-memory SQLite, plus a reservation race on a shared SQLite file that the `postgres` CI job repeats on PostgreSQL 16 |
 
 ## Why this matters for hiring
 
@@ -97,11 +97,15 @@ All error responses are `application/problem+json` (RFC 7807).
 ```bash
 dotnet test                                                  # 20 tests on SQLite, no Docker
 dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+
+# the reservation race on PostgreSQL, on a throwaway database built by the EF migrations
+TEST_POSTGRES_CONNECTION="Host=localhost;Username=postgres;Password=..." \
+  dotnet test --filter FullyQualifiedName~ReserveConcurrencyTests
 ```
 
 - **ProductServiceTests** (11): create/get/list-filter/update-partial/delete/reserve (available, insufficient, missing)/negative stock rejected by the CHECK constraint/unique-index violation mapped to `DuplicateSkuException`/SKU-exists. Fresh in-memory SQLite per test.
 - **ApiIntegrationTests** (8): full minimal-API pipeline via `WebApplicationFactory` — health, CRUD roundtrip, 404 problem shape, validation 400, duplicate-SKU 409, reserve-over-stock 409, reserve-missing 404, delete 204-then-404.
-- **ReserveConcurrencyTests** (1): 20 concurrent reservations of 1 unit against stock 10, each with its own connection to a shared SQLite file. Exactly 10 succeed and stock ends at 0. The earlier read-check-save version let all 20 through.
+- **ReserveConcurrencyTests** (1): 20 concurrent reservations of 1 unit against stock 10, each with its own connection to a shared SQLite file. Exactly 10 succeed, each reports the stock its own update left (9 down to 0), and stock ends at 0. The earlier read-check-save version let all 20 through. With `TEST_POSTGRES_CONNECTION` set it runs on PostgreSQL instead; the `postgres` CI job does this against a `postgres:16-alpine` service.
 
 Line coverage 90.66% (204 of 225 lines, excluding generated EF migrations), from `dotnet test -c Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings`.
 
