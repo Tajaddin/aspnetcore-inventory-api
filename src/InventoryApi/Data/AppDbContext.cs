@@ -10,6 +10,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var product = modelBuilder.Entity<Product>();
+        product.ToTable(t => t.HasCheckConstraint(
+            "CK_Products_StockQuantity_NonNegative", "\"StockQuantity\" >= 0"));
         product.HasKey(p => p.Id);
         product.Property(p => p.Name).IsRequired().HasMaxLength(200);
         product.Property(p => p.Sku).IsRequired().HasMaxLength(64);
