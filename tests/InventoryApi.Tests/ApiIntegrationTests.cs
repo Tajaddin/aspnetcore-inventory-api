@@ -84,6 +84,13 @@ public class ApiIntegrationTests : IClassFixture<CustomWebAppFactory>
     }
 
     [Fact]
+    public async Task Reserve_missing_product_returns_404()
+    {
+        var resp = await _client.PostAsJsonAsync("/api/products/999999/reserve", new ReserveRequest(1));
+        resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Delete_returns_204_then_404()
     {
         var create = await _client.PostAsJsonAsync("/api/products", NewProduct("DEL-1"));

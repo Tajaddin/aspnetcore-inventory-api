@@ -10,7 +10,7 @@ runs:       3 consecutive
 median throughput: 1,526 rps  (run 2)
 median p99:        57.24 ms
 max throughput:    1,593 rps  (run 3)
-README hero claim: 1,482 rps p99 58 ms — measured at/above claim
+README hero:       median run, 1,526 rps p99 57.24 ms
 
 ## Raw runs
 

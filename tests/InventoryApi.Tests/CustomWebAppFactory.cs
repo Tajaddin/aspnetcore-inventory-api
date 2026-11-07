@@ -33,10 +33,7 @@ public class CustomWebAppFactory : WebApplicationFactory<Program>
                 services.Remove(d);
             }
 
-            _connection = new SqliteConnection("DataSource=:memory:");
-            _connection.Open();
-
-            services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection));
+            AddDatabase(services);
 
             // Build the schema once.
             using var provider = services.BuildServiceProvider();
@@ -44,6 +41,13 @@ public class CustomWebAppFactory : WebApplicationFactory<Program>
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.Database.EnsureCreated();
         });
+    }
+
+    protected virtual void AddDatabase(IServiceCollection services)
+    {
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+        services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection));
     }
 
     protected override void Dispose(bool disposing)

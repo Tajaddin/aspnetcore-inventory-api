@@ -1,7 +1,9 @@
 using InventoryApi.Data;
 using InventoryApi.Domain;
 using InventoryApi.Dtos;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace InventoryApi.Services;
 
@@ -15,6 +17,12 @@ public enum ReserveOutcome
     NotFound,
     InsufficientStock
 }
+
+/// <summary>
+/// The insert hit the unique SKU index: another create took the SKU after
+/// the caller checked it was free.
+/// </summary>
+public class DuplicateSkuException(string sku) : Exception($"SKU '{sku}' already exists");
 
 public class ProductService(AppDbContext db)
 {
@@ -67,7 +75,14 @@ public class ProductService(AppDbContext db)
             UpdatedAt = now
         };
         db.Products.Add(product);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            throw new DuplicateSkuException(req.Sku);
+        }
         return ProductResponse.From(product);
     }
 
@@ -94,24 +109,37 @@ public class ProductService(AppDbContext db)
     }
 
     /// <summary>
-    /// Atomically decrement stock by quantity. Returns the outcome plus the
-    /// new product state when reserved.
+    /// Atomically decrement stock by quantity with one conditional UPDATE, so
+    /// concurrent reservations can never take more than the stock on hand.
+    /// Returns the outcome plus the new product state when reserved.
     /// </summary>
     public async Task<(ReserveOutcome Outcome, ProductResponse? Product)> ReserveAsync(
         int id, int quantity, CancellationToken ct = default)
     {
-        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
-        if (product is null)
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var now = DateTime.UtcNow;
+        var reserved = await db.Products
+            .Where(p => p.Id == id && p.StockQuantity >= quantity)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.StockQuantity, p => p.StockQuantity - quantity)
+                .SetProperty(p => p.UpdatedAt, now), ct);
+        if (reserved == 0)
         {
-            return (ReserveOutcome.NotFound, null);
+            var exists = await db.Products.AnyAsync(p => p.Id == id, ct);
+            return (exists ? ReserveOutcome.InsufficientStock : ReserveOutcome.NotFound, null);
         }
-        if (product.StockQuantity < quantity)
-        {
-            return (ReserveOutcome.InsufficientStock, null);
-        }
-        product.StockQuantity -= quantity;
-        product.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+
+        // The UPDATE holds the row lock until commit, so this reads exactly
+        // the state it left, not a later reservation's.
+        var product = await db.Products.AsNoTracking().SingleAsync(p => p.Id == id, ct);
+        await tx.CommitAsync(ct);
         return (ReserveOutcome.Reserved, ProductResponse.From(product));
     }
+
+    private static bool IsUniqueViolation(DbUpdateException ex) => ex.InnerException switch
+    {
+        PostgresException pg => pg.SqlState == PostgresErrorCodes.UniqueViolation,
+        SqliteException sqlite => sqlite.SqliteExtendedErrorCode == SQLitePCL.raw.SQLITE_CONSTRAINT_UNIQUE,
+        _ => false
+    };
 }

@@ -125,6 +125,29 @@ public class ProductServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Database_rejects_negative_stock()
+    {
+        var created = await _service.CreateAsync(SampleCreate(stock: 1));
+
+        var act = () => _db.Products.Where(p => p.Id == created.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, -1));
+
+        await act.Should().ThrowAsync<SqliteException>().WithMessage("*CHECK constraint failed*");
+    }
+
+    [Fact]
+    public async Task Create_with_taken_sku_throws_DuplicateSkuException()
+    {
+        // The insert that loses the race when two creates both pass the
+        // endpoint's SkuExistsAsync check.
+        await _service.CreateAsync(SampleCreate(sku: "TAKEN"));
+
+        var act = () => _service.CreateAsync(SampleCreate(sku: "TAKEN"));
+
+        await act.Should().ThrowAsync<DuplicateSkuException>();
+    }
+
+    [Fact]
     public async Task SkuExists_detects_duplicates()
     {
         await _service.CreateAsync(SampleCreate(sku: "DUP"));
